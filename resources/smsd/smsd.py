@@ -22,6 +22,7 @@ import signal
 import traceback
 import json
 from gsmmodem.modem import GsmModem
+from gsmmodem.exceptions import TimeoutException
 
 try:
     from jeedom.jeedom import *
@@ -35,13 +36,17 @@ gsm = False
 
 
 def handleSms(sms):
-    logging.debug("Got SMS message : %s", sms)
-    if not sms.text:
-        logging.debug("No text so nothing to do")
-        return
-    message = jeedom_utils.remove_accents(sms.text.replace('"', ''))
-    jeedom_com.add_changes('devices::'+str(sms.number), {'number': sms.number, 'message': message})
-
+    # updated by GDE
+    if type(sms).__name__ == "ReceivedSms":
+        logging.info(f"Got SMS message: '{sms.text}' from {sms.number}")
+        if not sms.text:
+            logging.debug("No text so nothing to do")
+            return
+        message = jeedom_utils.remove_accents(sms.text.replace('"', ''))
+        jeedom_com.add_changes('devices::'+str(sms.number), {'number': sms.number, 'message': message})
+    elif type(sms).__name__ == "StatusReport":
+        logging.info(f"Got SMS status report: '{sms.deliveryStatus}' from {sms.number}")
+    # end of update
 
 def listen():
     global gsm
@@ -105,11 +110,17 @@ def listen():
             try:
                 gsm.waitForNetworkCoverage()
                 gsm.processStoredSms(True)
-                if signal_strength_store != gsm.signalStrength:
-                    signal_strength_store = gsm.signalStrength
-                    jeedom_com.send_change_immediate({'number': 'signal_strength', 'message': str(gsm.signalStrength)})
+                # updated by GDE
+                signal_strength = gsm.signalStrength
+                if signal_strength_store != signal_strength:
+                    signal_strength_store = signal_strength
+                    jeedom_com.send_change_immediate({'number': 'signal_strength', 'message': str(signal_strength)})
+            except TimeoutException as e:
+                logging.exception("Exit 1 because TimeOut exception is fatal")
+                shutdown()
+                # end of update
             except Exception as e:
-                logging.error("Exception on GSM : %s", e)
+                logging.error(f"Exception on GSM : {e}")
                 if str(e) == 'Attempting to use a port that is not open' or str(e) == 'Timeout' or str(e) == 'Device not searching for network operator':
                     logging.error("Exit 1 because this exeption is fatal")
                     shutdown()

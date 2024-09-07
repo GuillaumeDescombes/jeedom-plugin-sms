@@ -1150,35 +1150,72 @@ class GsmModem(SerialComms):
                 messages.append(ReceivedSms(self, Sms.TEXT_MODE_STATUS_MAP[msgStatus], number, parseTextModeTimeStr(msgTime), msgText, None, [], msgIndex))
                 delMessages.add(int(msgIndex))
         else:
-            cmglRegex = re.compile('^\+CMGL:\s*(\d+),\s*(\d+),.*$')
-            readPdu = False
-            result = self.write('AT+CMGL={0}'.format(status))
-            for line in result:
-                if not readPdu:
-                    cmglMatch = cmglRegex.match(line)
-                    if cmglMatch:
-                        msgIndex = int(cmglMatch.group(1))
-                        msgStat = int(cmglMatch.group(2))
-                        readPdu = True
-                else:
-                    try:
-                        smsDict = decodeSmsPdu(line)
-                    except EncodingError:
-                        self.log.debug('Discarding line from +CMGL response: %s', line)
-                    except:
-                        pass
-                        # dirty fix warning: https://github.com/yuriykashin/python-gsmmodem/issues/1
-                        # todo: make better fix
+            #cmglRegex = re.compile('^\+CMGL:\s*(\d+),\s*(\d+),.*$')
+            #readPdu = False
+            #result = self.write('AT+CMGL={0}'.format(status))
+            #for line in result:
+            #    if not readPdu:
+            #        cmglMatch = cmglRegex.match(line)
+            #        if cmglMatch:
+            #            msgIndex = int(cmglMatch.group(1))
+            #            msgStat = int(cmglMatch.group(2))
+            #            readPdu = True
+            #    else:
+            #        try:
+            #            smsDict = decodeSmsPdu(line)
+            #        except EncodingError:
+            #            self.log.debug('Discarding line from +CMGL response: %s', line)
+            #        except:
+            #            pass
+            #            # dirty fix warning: https://github.com/yuriykashin/python-gsmmodem/issues/1
+            #            # todo: make better fix
+            #        else:
+            #            if smsDict['type'] == 'SMS-DELIVER':
+            #                sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh', []), msgIndex)
+            #            elif smsDict['type'] == 'SMS-STATUS-REPORT':
+            #                sms = StatusReport(self, int(msgStat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
+            #            else:
+            #                raise CommandError('Invalid PDU type for readStoredSms(): {0}'.format(smsDict['type']))
+            #            messages.append(sms)
+            #            delMessages.add(msgIndex)
+            #            readPdu = False
+            # added by GDE
+            cmgrRegex = re.compile(r'^\+CMGR:\s*(\d+),.*$')
+            for msgIndex in range(0,10):
+                readPdu = False
+                result = self.write('AT+CMGR={0}'.format(msgIndex))
+                for line in result:
+                    if not readPdu:
+                        cmglMatch = cmgrRegex.match(line)
+                        if cmglMatch:
+                            msgStat = int(cmglMatch.group(1))
+                            readPdu = True
+                            self.log.debug(f"Index: {msgIndex} - header: {line}")
                     else:
-                        if smsDict['type'] == 'SMS-DELIVER':
-                            sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh', []), msgIndex)
-                        elif smsDict['type'] == 'SMS-STATUS-REPORT':
-                            sms = StatusReport(self, int(msgStat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
+                        try:
+                            smsDict = decodeSmsPdu(line)
+                        except EncodingError:
+                            self.log.debug('Discarding line from +CMGR response: %s', line)
+                        except:
+                            pass
+                            # dirty fix warning: https://github.com/yuriykashin/python-gsmmodem/issues/1
+                            # todo: make better fix
                         else:
-                            raise CommandError('Invalid PDU type for readStoredSms(): {0}'.format(smsDict['type']))
-                        messages.append(sms)
-                        delMessages.add(msgIndex)
-                        readPdu = False
+                            hasReadPdu = True
+                            if smsDict['type'] == 'SMS-DELIVER':
+                                self.log.debug(f"Index: {msgIndex} - text: {smsDict['text']}")
+                                sms = ReceivedSms(self, int(msgStat), smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'])
+                            elif smsDict['type'] == 'SMS-STATUS-REPORT':
+                                self.log.debug(f"Index: {msgIndex} - StatusReport: {smsDict['number']} - {smsDict['reference']}")
+                                sms = StatusReport(self, int(msgStat), smsDict['reference'], smsDict['number'], smsDict['time'], smsDict['discharge'], smsDict['status'])
+                            else:
+                                raise CommandError('Invalid PDU type for readStoredSms(): {0}'.format(smsDict['type']))
+                            messages.append(sms)
+                            delMessages.add(msgIndex)
+                if not readPdu:
+                    #no more message
+                    break
+            #end of addition
         if delete:
             if status == Sms.STATUS_ALL:
                 # Delete all messages
