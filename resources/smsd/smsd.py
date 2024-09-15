@@ -70,8 +70,8 @@ def listen():
             logging.debug("Configure smsc : %s", _smsc)
             gsm.write('AT+CSCA="{0}"'.format(_smsc))
         logging.debug("Waiting for network...")
-        gsm.waitForNetworkCoverage()
-        logging.debug("Ok")
+        gsm.waitForNetworkCoverage(True)
+        logging.info("Modem is attached to network")
         try:
             jeedom_com.send_change_immediate({'number': 'network_name', 'message': str(gsm.networkName)})
         except Exception as e:
@@ -108,7 +108,8 @@ def listen():
         while 1:
             time.sleep(_cycle)
             try:
-                gsm.waitForNetworkCoverage()
+                #GDE: do not check network but only signal strength
+                gsm.waitForNetworkCoverage(False)
                 gsm.processStoredSms(True)
                 # updated by GDE
                 signal_strength = gsm.signalStrength
@@ -141,7 +142,8 @@ def read_socket():
             if message['apikey'] != _apikey:
                 logging.error("Invalid apikey from socket : ", message)
                 return
-            gsm.waitForNetworkCoverage()
+            #GDE: do not check network but only signal strength
+            gsm.waitForNetworkCoverage(False)
             logging.info("Envoi d'un message à %s: %s", message['number'], message['message'])
             gsm.sendSms(message['number'], message['message'])
     except Exception as e:
@@ -264,7 +266,7 @@ try:
     jeedom_utils.write_pid(str(_pidfile))
     jeedom_com = jeedom_com(apikey=_apikey, url=_callback, cycle=_cycle)
     if not jeedom_com.test():
-        logging.error('Network communication issues. Please fixe your Jeedom network configuration.')
+        logging.error('Network communication issues. Please fix your Jeedom network configuration.')
         shutdown()
     jeedom_socket = jeedom_socket(port=_socket_port, address=_socket_host)
     listen()

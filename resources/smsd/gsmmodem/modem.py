@@ -847,7 +847,8 @@ class GsmModem(SerialComms):
             self.write('AT+CPBS="ON"')
         self.write('AT+CPBW=1,"' + phone_number + '"')
 
-    def waitForNetworkCoverage(self, timeout=None):
+    #GDE adding checkCreg
+    def waitForNetworkCoverage(self, checkCreg = True, timeout=None):
         """ Block until the modem has GSM network coverage.
 
         This method blocks until the modem is registered with the network
@@ -870,7 +871,8 @@ class GsmModem(SerialComms):
             t = threading.Timer(timeout, _cancelBlock)
             t.start()
         ss = -1
-        checkCreg = True
+        #GDE
+        #checkCreg = True
         while block[0]:
             if checkCreg:
                 cregResult = lineMatching('^\+CREG:\s*(\d),(\d)(,[^,]*,[^,]*)?$', self.write('AT+CREG?', parseError=False))  # example result: +CREG: 0,1
